@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <com.syntheticengine.ui.TachometerView
+        android:id="@+id/tachometer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/startStop"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:layout_weight="1"
+            android:text="@string/start" />
+
+        <Spinner
+            android:id="@+id/profile"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1" />
+    </LinearLayout>
+
+    <TextView
+        style="@style/Label"
+        android:text="@string/volume" />
+
+    <SeekBar
+        android:id="@+id/volume"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:max="100" />
+
+    <Switch
+        android:id="@+id/demo"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:text="@string/demo_mode"
+        android:textColor="#FFE8EAED" />
+
+    <LinearLayout
+        android:id="@+id/demoControls"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <Button
+            android:id="@+id/brake"
+            android:layout_width="wrap_content"
+            android:layout_height="64dp"
+            android:text="@string/demo_brake" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                style="@style/Label"
+                android:text="@string/demo_pedal" />
+
+            <SeekBar
+                android:id="@+id/pedal"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:max="100" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

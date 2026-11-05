@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Synthetic Engine</string>
+    <string name="start">Start engine</string>
+    <string name="stop">Stop engine</string>
+    <string name="engine">Engine</string>
+    <string name="demo_mode">Demo mode (virtual car)</string>
+    <string name="demo_pedal">Accelerator</string>
+    <string name="demo_brake">Brake</string>
+    <string name="volume">Volume</string>
+    <string name="notification_channel">Engine sound</string>
+    <string name="notification_text">Synthesizing engine sound</string>
+    <string name="need_location">Location permission is needed for GPS speed when the car does not report its own speed.</string>
+</resources>
