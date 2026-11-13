@@ -1,4 +1,4 @@
-# Synthetic Engine
+# EV Synthetic Engine
 
 An Android Auto app that reads how your car is actually moving, simulates a combustion
 engine and gearbox from that, plays the engine sound through the car speakers in real
@@ -79,7 +79,7 @@ WAVs as downloadable artifacts.
    ⋮ → *Developer settings* → enable **Unknown sources**.
 3. Connect to the car, or run the
    [Desktop Head Unit](https://developer.android.com/training/cars/testing/dhu).
-   The app shows up in the launcher as **Synthetic Engine**.
+   The app shows up in the launcher as **EV Synthetic Engine**.
 4. Opening it on the car screen starts the engine. Use ▶/■ to start or stop, and tap the
    engine name to switch engines. Grant location when asked: it is needed for GPS speed if
    the car doesn't share its own.

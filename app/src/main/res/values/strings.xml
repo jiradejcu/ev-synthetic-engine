@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Synthetic Engine</string>
+    <string name="app_name">EV Synthetic Engine</string>
     <string name="start">Start engine</string>
     <string name="stop">Stop engine</string>
     <string name="engine">Engine</string>

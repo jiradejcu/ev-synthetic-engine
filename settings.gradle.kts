@@ -14,7 +14,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "SyntheticEngine"
+rootProject.name = "EVSyntheticEngine"
 
 // Pure-Kotlin engine core (sensor fusion, engine model, synthesizer). Built as an
 // included build so it can also be tested/run on its own: ./gradlew -p engine test
