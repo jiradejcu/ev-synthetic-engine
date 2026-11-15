@@ -1,6 +1,8 @@
 package com.syntheticengine.audio
 
+import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
@@ -16,9 +18,28 @@ import kotlin.math.max
  * render that buffer, blocking-write it to the AudioTrack. The blocking write paces the
  * loop, so the model runs in lock-step with what you hear (~5 ms per step).
  *
- * Audio uses USAGE_MEDIA, so with Android Auto it plays through the car speakers.
+ * Audio uses USAGE_MEDIA and holds media audio focus while running. Android Auto only
+ * opens its media audio channel to the head unit when an app holds media focus; without
+ * it the track plays into nothing while the phone is connected to the car.
  */
-class EngineAudioThread(private val controller: EngineController) : Thread("engine-audio") {
+class EngineAudioThread(
+    context: Context,
+    private val controller: EngineController,
+) : Thread("engine-audio") {
+
+    private val audioManager = context.getSystemService(AudioManager::class.java)
+    private val attributes = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_MEDIA)
+        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+        .build()
+
+    // Keep playing on any focus change: the engine sound should mix with music or
+    // navigation prompts rather than stop (the system ducks us for prompts).
+    private val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+        .setAudioAttributes(attributes)
+        .setWillPauseWhenDucked(false)
+        .setOnAudioFocusChangeListener { change -> Log.i(TAG, "Audio focus change: $change") }
+        .build()
 
     @Volatile private var alive = true
 
@@ -31,12 +52,7 @@ class EngineAudioThread(private val controller: EngineController) : Thread("engi
         )
         val track = try {
             AudioTrack.Builder()
-                .setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                        .build(),
-                )
+                .setAudioAttributes(attributes)
                 .setAudioFormat(
                     AudioFormat.Builder()
                         .setSampleRate(sampleRate)
@@ -62,6 +78,10 @@ class EngineAudioThread(private val controller: EngineController) : Thread("engi
         // Short fade in/out so starting/stopping never clicks.
         var fade = 0.0
         val fadeStep = dt / 0.4
+        val focus = audioManager.requestAudioFocus(focusRequest)
+        if (focus != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+            Log.w(TAG, "Audio focus not granted ($focus); car may not route the sound")
+        }
         track.play()
         try {
             while (alive || fade > 0.0) {
@@ -82,6 +102,7 @@ class EngineAudioThread(private val controller: EngineController) : Thread("engi
             track.pause()
             track.flush()
             track.release()
+            audioManager.abandonAudioFocusRequest(focusRequest)
         }
     }
 

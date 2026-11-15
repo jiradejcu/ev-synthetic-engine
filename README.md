@@ -98,7 +98,9 @@ so you can hear and see the full pipeline while parked.
   don't expose speed. The app falls back to the phone, so mount the phone firmly: a phone
   sliding around in a cup holder shows up as "acceleration".
 - The car accelerometer's forward axis is assumed to be index 1 (`MotionFusion.carForwardAxis`).
-- The sound plays on the media stream without taking audio focus, so it mixes with
-  your music instead of pausing it.
+- The sound plays on the media stream and takes media audio focus while the engine runs.
+  Android Auto only sends media audio to the car when some app holds focus, so without
+  it the sound is silent while connected. Starting the engine pauses music that is
+  already playing; music started afterwards mixes with the engine sound.
 - This is an entertainment app. Keep the volume at a level where you can still hear
   sirens and traffic.

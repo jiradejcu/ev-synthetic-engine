@@ -73,7 +73,7 @@ class EngineController private constructor(private val app: Context) {
         fusion.reset()
         vehicle.reset()
         phoneSensors.start()
-        audio = EngineAudioThread(this).also { it.start() }
+        audio = EngineAudioThread(app, this).also { it.start() }
         EngineService.start(app)
         notifyChanged()
     }
