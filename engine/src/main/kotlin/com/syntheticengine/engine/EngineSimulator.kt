@@ -53,6 +53,8 @@ class EngineSimulator(profile: EngineProfile) {
     private var timeSinceShift = 10.0
     private var limiterHold = 0.0
     private var blipTimer = 0.0
+    private var overrun = false
+    private var overrunCondTime = 0.0
 
     var state: EngineState = EngineState.idle(profile)
         private set
@@ -64,6 +66,8 @@ class EngineSimulator(profile: EngineProfile) {
         shiftTimer = 0.0
         timeSinceShift = 10.0
         blipTimer = 0.0
+        overrun = false
+        overrunCondTime = 0.0
         state = EngineState.idle(profile)
     }
 
@@ -118,7 +122,11 @@ class EngineSimulator(profile: EngineProfile) {
             }
         }
         if (blipTimer > 0) blipTimer -= dt
-        val blip = if (blipTimer > 0) 0.5 * blipTimer / BLIP_S else 0.0
+        // Blip envelope: short ramp up, then fade, so it never steps in as a click.
+        val blip = if (blipTimer > 0) {
+            val elapsed = BLIP_S - blipTimer
+            BLIP_LEVEL * if (elapsed < BLIP_ATTACK_S) elapsed / BLIP_ATTACK_S else blipTimer / (BLIP_S - BLIP_ATTACK_S)
+        } else 0.0
         if (v < 0.5) gear = 1
 
         // --- Target RPM ----------------------------------------------------------
@@ -144,7 +152,18 @@ class EngineSimulator(profile: EngineProfile) {
         rpm += (target - rpm) * smoothing(dt, tau)
         if (limiter) limiterHold = 0.15 else limiterHold -= dt
 
-        val overrun = rawThrottle < 0.03 && accelMps2 < -0.25 && rpm > p.idleRpm * 1.6
+        // Hysteresis: the condition must persist before overrun starts or ends, so sensor
+        // noise around the threshold doesn't toggle the burble on and off.
+        val overrunCond = rawThrottle < 0.03 && accelMps2 < -0.25 && rpm > p.idleRpm * 1.6
+        if (overrunCond != overrun) {
+            overrunCondTime += dt
+            if (overrunCondTime > if (overrun) 0.30 else 0.25) {
+                overrun = overrunCond
+                overrunCondTime = 0.0
+            }
+        } else {
+            overrunCondTime = 0.0
+        }
         state = EngineState(
             rpm = rpm,
             gear = if (v < 0.3) 0 else gear,
@@ -166,6 +185,8 @@ class EngineSimulator(profile: EngineProfile) {
 
     private companion object {
         const val BLIP_S = 0.25
+        const val BLIP_ATTACK_S = 0.05
+        const val BLIP_LEVEL = 0.4
     }
 
     private fun smoothing(dt: Double, tau: Double) = 1.0 - exp(-dt / tau)
