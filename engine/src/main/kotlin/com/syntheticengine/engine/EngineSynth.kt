@@ -18,6 +18,10 @@ import kotlin.math.tanh
  *  4. A low engine-order tone, intake noise, overrun crackle and limiter cuts are added,
  *     then everything is DC-blocked and soft-clipped. Banks are panned left/right.
  *
+ * With the throttle closed the engine is still turning, so loudness keeps rising with
+ * RPM. On overrun the pulses turn weak and irregular (a lean burble with occasional
+ * pops) and the closed throttle plate adds a vacuum hiss.
+ *
  * RPM/throttle are interpolated across each buffer so there is no zipper noise.
  */
 class EngineSynth(
@@ -39,6 +43,7 @@ class EngineSynth(
     private var crankDeg = 0.0
     private var lastRpm = profile.idleRpm
     private var lastThrottle = 0.0
+    private var lastOverrun = 0.0
 
     private lateinit var cylGain: DoubleArray
     private val pulseEnv = DoubleArray(2)
@@ -48,6 +53,7 @@ class EngineSynth(
     private val dcX = DoubleArray(2)
     private val dcY = DoubleArray(2)
     private var intakeBp = Biquad()
+    private var hissBp = Biquad()
     private var limiterSkip = 0
     private val pulseDecay = exp(-1.0 / (0.0018 * sampleRate))
 
@@ -61,6 +67,7 @@ class EngineSynth(
         resonators = Array(2) { Array(p.resonancesHz.size) { Biquad() } }
         updateResonators(0.0)
         intakeBp.setBandPass(1800.0, 1.2, sampleRate)
+        hissBp.setBandPass(2600.0, 0.9, sampleRate)
     }
 
     private fun updateResonators(throttle: Double) {
@@ -82,6 +89,7 @@ class EngineSynth(
         val p = profile
         val targetRpm = state.rpm.coerceIn(0.0, p.limiterRpm * 1.05)
         val targetThrottle = state.throttle.coerceIn(0.0, 1.0)
+        val targetOverrun = if (state.overrun) 1.0 else 0.0
         updateResonators(targetThrottle)
 
         val invFs = 1.0 / sampleRate
@@ -94,6 +102,8 @@ class EngineSynth(
             val t = (n + 1).toDouble() / frames
             val rpm = lastRpm + (targetRpm - lastRpm) * t
             val thr = lastThrottle + (targetThrottle - lastThrottle) * t
+            val ov = lastOverrun + (targetOverrun - lastOverrun) * t
+            val rpmNorm = rpm / p.redlineRpm
 
             // --- Crank advance & firing events ---
             val prev = crankDeg
@@ -103,7 +113,7 @@ class EngineSynth(
             for (c in 0 until p.cylinders) {
                 val a = p.firingAnglesDeg[c]
                 val fired = if (!wrapped) a > prev && a <= crankDeg else a > prev || a <= crankDeg
-                if (fired) fire(c, thr, state)
+                if (fired) fire(c, thr, rpmNorm, state)
             }
 
             // --- Exhaust banks ---
@@ -129,25 +139,34 @@ class EngineSynth(
 
             // --- Engine order tone (gives the low-end body) ---
             val orderPhase = crankDeg / 720.0 * 2 * PI
-            val tone = (0.10 + 0.12 * thr) * sin(orderPhase * p.cylinders) +
+            val tone = (0.10 + 0.06 * rpmNorm + 0.12 * thr) * sin(orderPhase * p.cylinders) +
                 0.035 * sin(orderPhase * p.cylinders * 0.5 + 0.7)
 
             // --- Intake / mechanical noise ---
-            val rpmNorm = rpm / p.redlineRpm
             val intake = intakeBp.process(rng.nextDouble() * 2 - 1) *
                 (0.02 + 0.10 * thr * rpmNorm) * (0.5 + pulseEnv[0] + pulseEnv[1])
 
-            val drive = p.outputGain * (0.55 + 0.45 * thr)
-            val mixL = 0.68 * left + 0.32 * right + tone + intake
-            val mixR = 0.32 * left + 0.68 * right + tone + intake
+            // Closed-throttle vacuum hiss through the throttle plate while on overrun.
+            val hiss = hissBp.process(rng.nextDouble() * 2 - 1) * 0.07 * ov * rpmNorm
+
+            // Extra gain on overrun so coasting/braking stays clearly audible.
+            val drive = p.outputGain * (0.55 + 0.30 * rpmNorm * (1 - thr) + 0.45 * thr) * (1 + OVERRUN_BOOST * ov)
+            val mixL = 0.68 * left + 0.32 * right + tone + intake + hiss
+            val mixR = 0.32 * left + 0.68 * right + tone + intake + hiss
             out[2 * n] = (tanh(mixL * drive) * 0.85 * vol).toFloat()
             out[2 * n + 1] = (tanh(mixR * drive) * 0.85 * vol).toFloat()
         }
         lastRpm = targetRpm
         lastThrottle = targetThrottle
+        lastOverrun = targetOverrun
     }
 
-    private fun fire(cyl: Int, throttle: Double, state: EngineState) {
+    private companion object {
+        /** Extra drive while on overrun; 0.6 is about +4 dB. */
+        const val OVERRUN_BOOST = 0.6
+    }
+
+    private fun fire(cyl: Int, throttle: Double, rpmNorm: Double, state: EngineState) {
         val p = profile
         val bank = p.exhaustBank[cyl]
         if (state.limiter) {
@@ -155,14 +174,18 @@ class EngineSynth(
             limiterSkip = (limiterSkip + 1) % 3
             if (limiterSkip != 0) return
         }
-        var amp = (0.30 + 0.70 * throttle) * cylGain[cyl] * (1.0 + 0.08 * (rng.nextDouble() * 2 - 1))
+        // Even with the throttle shut, a faster-spinning engine pumps harder and is louder.
+        val base = (0.30 + 0.30 * rpmNorm).coerceAtMost(0.6)
+        var amp = (base + (1 - base) * throttle) * cylGain[cyl] * (1.0 + 0.08 * (rng.nextDouble() * 2 - 1))
         var noise = p.pulseNoise * (0.4 + 0.6 * throttle)
-        if (state.overrun && state.rpm > 2400 && rng.nextDouble() < 0.035) {
+        if (state.overrun && state.rpm > 1800 && rng.nextDouble() < (0.012 + 0.03 * rpmNorm) * p.overrunPopRate) {
             // Overrun pop: unburnt fuel igniting in the exhaust.
-            amp = 1.4 + rng.nextDouble()
+            amp = 1.2 + rng.nextDouble()
             noise = 1.0
         } else if (state.overrun) {
-            amp *= 0.55
+            // Lean, partly misfiring combustion: weak and irregular, a crackly burble.
+            amp *= 0.45 + 0.5 * rng.nextDouble()
+            noise = maxOf(noise, 0.85)
         }
         pulseEnv[bank] += amp
         pulseNoiseAmt[bank] = noise

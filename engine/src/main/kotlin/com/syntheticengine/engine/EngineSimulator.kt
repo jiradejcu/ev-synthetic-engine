@@ -52,6 +52,7 @@ class EngineSimulator(profile: EngineProfile) {
     private var shiftTimer = 0.0
     private var timeSinceShift = 10.0
     private var limiterHold = 0.0
+    private var blipTimer = 0.0
 
     var state: EngineState = EngineState.idle(profile)
         private set
@@ -62,6 +63,7 @@ class EngineSimulator(profile: EngineProfile) {
         throttle = 0.0
         shiftTimer = 0.0
         timeSinceShift = 10.0
+        blipTimer = 0.0
         state = EngineState.idle(profile)
     }
 
@@ -95,17 +97,28 @@ class EngineSimulator(profile: EngineProfile) {
         // Above ~80% throttle the box holds gears to the redline.
         val shape = (throttle / 0.8).coerceAtMost(1.0).pow(1.5)
         val upRpm = lerp(max(1900.0, p.idleRpm * 2.4), p.redlineRpm * 0.94, shape)
-        val downRpm = lerp(p.idleRpm * 1.35, p.redlineRpm * 0.45, shape)
+        var downRpm = lerp(p.idleRpm * 1.35, p.redlineRpm * 0.45, shape)
+        // Braking: step down early (like a sport-mode box) so the engine keeps some revs
+        // and each downshift is heard, instead of lugging in top gear down to idle.
+        val braking = rawThrottle < 0.03 && accelMps2 < -1.5
+        if (braking) downRpm = max(downRpm, p.idleRpm * 2.3)
         if (shiftTimer <= 0 && timeSinceShift > 0.6) {
             val inGear = dtr.rpmAt(v, gear)
-            if (gear < dtr.gearCount && inGear > upRpm) {
+            if (gear < dtr.gearCount && inGear > upRpm && !braking) {
                 shift(gear + 1)
             } else if (gear > 1) {
                 val lower = dtr.rpmAt(v, gear - 1)
                 val kickdown = throttle > 0.8 && lower < p.redlineRpm * 0.82
-                if ((inGear < downRpm || kickdown) && lower < upRpm * 0.92) shift(gear - 1)
+                val lowerOk = lower < if (braking) max(upRpm * 0.92, p.redlineRpm * 0.5) else upRpm * 0.92
+                if ((inGear < downRpm || kickdown) && lowerOk) {
+                    shift(gear - 1)
+                    // Rev-matching blip on a closed-throttle downshift.
+                    if (rawThrottle < 0.03 && v > 3.0) blipTimer = BLIP_S
+                }
             }
         }
+        if (blipTimer > 0) blipTimer -= dt
+        val blip = if (blipTimer > 0) 0.5 * blipTimer / BLIP_S else 0.0
         if (v < 0.5) gear = 1
 
         // --- Target RPM ----------------------------------------------------------
@@ -135,7 +148,7 @@ class EngineSimulator(profile: EngineProfile) {
         state = EngineState(
             rpm = rpm,
             gear = if (v < 0.3) 0 else gear,
-            throttle = throttle,
+            throttle = max(throttle, blip),
             speedMps = v,
             accelMps2 = accelMps2,
             shifting = shiftTimer > 0,
@@ -149,6 +162,10 @@ class EngineSimulator(profile: EngineProfile) {
         gear = newGear
         shiftTimer = 0.22
         timeSinceShift = 0.0
+    }
+
+    private companion object {
+        const val BLIP_S = 0.25
     }
 
     private fun smoothing(dt: Double, tau: Double) = 1.0 - exp(-dt / tau)

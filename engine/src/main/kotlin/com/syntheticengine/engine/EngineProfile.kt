@@ -49,6 +49,8 @@ data class EngineProfile(
     val bankDetune: Double,
     val outputGain: Double,
     val drivetrain: Drivetrain,
+    /** Multiplier on how often unburnt fuel pops in the exhaust on overrun. */
+    val overrunPopRate: Double = 1.0,
 ) {
     val cylinders: Int get() = firingAnglesDeg.size
 
@@ -142,7 +144,38 @@ data class EngineProfile(
             )
         }
 
-        val ALL: List<EngineProfile> = listOf(V8_CROSSPLANE, INLINE_4, FLAT_6)
+        /**
+         * Naturally aspirated 60° V12 supercar engine (Aventador-style character): a cylinder
+         * fires every 60° of crank, so each bank fires evenly every 120° like a straight-six.
+         * The result is a smooth, high-pitched howl that climbs to an 8500 rpm redline.
+         * Its intake and exhaust resonances sit high, and it crackles hard on overrun.
+         * It drives through a 7-speed single-clutch gearbox, with launch revs held high.
+         */
+        val V12 = EngineProfile(
+            id = "v12",
+            displayName = "V12 6.5 Supercar",
+            firingAnglesDeg = DoubleArray(12) { it * 60.0 },
+            exhaustBank = IntArray(12) { it % 2 },
+            idleRpm = 1000.0,
+            redlineRpm = 8500.0,
+            limiterRpm = 8700.0,
+            resonancesHz = doubleArrayOf(125.0, 390.0, 950.0, 2200.0),
+            resonanceGains = doubleArrayOf(1.0, 0.9, 0.45, 0.15),
+            resonanceQ = 3.2,
+            cylinderVariation = 0.04,
+            pulseNoise = 0.3,
+            bankDetune = 1.025,
+            outputGain = 1.5,
+            drivetrain = Drivetrain(
+                gearRatios = doubleArrayOf(3.91, 2.44, 1.81, 1.46, 1.19, 0.97, 0.80),
+                finalDrive = 4.67,
+                tireCircumferenceM = 2.18,
+                stallRpm = 3800.0,
+            ),
+            overrunPopRate = 2.5,
+        )
+
+        val ALL: List<EngineProfile> = listOf(V12, V8_CROSSPLANE, INLINE_4, FLAT_6)
 
         fun byId(id: String?): EngineProfile = ALL.firstOrNull { it.id == id } ?: ALL.first()
     }

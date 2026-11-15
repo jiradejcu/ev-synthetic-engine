@@ -41,7 +41,7 @@ RPM reacts as soon as you press the pedal instead of waiting for the next GPS fi
   low-frequency "thump", engine-order tones and intake noise, then soft-clipped.
 - Uneven per-bank pulse spacing gives the cross-plane V8 its burble. Lifting off
   produces overrun pops, and the limiter cuts sparks.
-- Engines: **V8 5.7 cross-plane**, **Inline-4 2.0**, **Flat-6 3.8**, each with its own
+- Engines: **V12 6.5 supercar** (default), **V8 5.7 cross-plane**, **Inline-4 2.0**, **Flat-6 3.8**, each with its own
   gearbox, idle speed and redline.
 
 **4. Display (`TachometerRenderer`)** — one Canvas renderer used on both screens: an RPM
